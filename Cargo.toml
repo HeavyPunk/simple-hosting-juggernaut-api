@@ -19,3 +19,9 @@ features = [
     "fast-rng",
     "macro-diagnostics",
 ]
+
+[dependencies.redis]
+version = "*"
+
+[dependencies.config]
+version = "*"
