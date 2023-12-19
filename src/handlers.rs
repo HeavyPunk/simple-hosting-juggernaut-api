@@ -1,5 +1,5 @@
 use crate::{models::{TaskRequest, Task, TaskStatus}, configuration_provider};
-use rabbitmq_stream_client::{Environment, types::Message, error::ClientError};
+use amiquip::{Connection, Exchange, Publish};
 use uuid::Uuid;
 use redis::Commands;
 
@@ -14,23 +14,22 @@ pub async fn put_task(body: TaskRequest) -> Result<impl warp::Reply, warp::Rejec
         context: body.context
     };
 
-    let serialized_task=  serde_json::to_vec(&task).ok().expect("serialization failed");
-    let environment = Environment::builder()
-        .host(&settings.rabbitmq_host)
-        .port(settings.rabbitmq_port.try_into().unwrap())
-        .build().await.ok().expect("environment building failed");
-    let mut producer = environment.producer().name("tasks").build("stream").await.ok().expect("stream building error");
-    producer
-        .send_with_confirm(Message::builder().body(serialized_task).build())
-        .await;
-    producer.close().await.ok().expect("closing producer error");
+    let serialized_task=  serde_json::to_vec(&task).unwrap();
+
+    let mut connection = Connection::insecure_open(&settings.rabbitmq_connection_string).unwrap();
+    let channel = connection.open_channel(None).unwrap();
+    let exchange = Exchange::direct(&channel);
+
+    exchange.publish(Publish::new(&serialized_task, "default")).unwrap();
+    connection.close().unwrap();
+
     Ok(warp::reply::json(&task_id))
 }
 
 pub async fn check_task_status(task_id: String) -> Result<impl warp::Reply, warp::Rejection> {
     let settings = configuration_provider::get_config();
-    let client = redis::Client::open(settings.redis_url).ok().expect("redis client constraction error");
-    let mut con = client.get_connection().ok().expect("connection error");
+    let client = redis::Client::open(settings.redis_url).unwrap();
+    let mut con = client.get_connection().unwrap();
     let task_status: Result<String, redis::RedisError> =  con.get(task_id.clone());
     if task_status.is_ok() {
         let response = TaskStatus {
