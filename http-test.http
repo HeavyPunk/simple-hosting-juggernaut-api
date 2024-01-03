@@ -1,0 +1,10 @@
+POST http://localhost:8000/task-put
+Content-Type: application/json
+
+{
+    "kind": "download-file",
+    "context": "{\"s3-path\": \"s3\",\"destination-path\": \"/\"}"
+}
+###
+
+GET http://localhost:8000/task-status/34a2e15a-c1c1-4315-a369-22cc3cbed8b7

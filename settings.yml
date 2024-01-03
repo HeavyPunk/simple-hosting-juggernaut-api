@@ -1,2 +1,2 @@
 redis-url: redis://127.0.0.1/
-rabbitmq-connection-string: amqp://guest:guest@localhost:5672
+rabbitmq-connection-string: amqp://rmuser:rmpassword@localhost:5672

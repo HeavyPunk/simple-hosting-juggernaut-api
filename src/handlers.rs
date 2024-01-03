@@ -1,4 +1,4 @@
-use crate::{models::{TaskRequest, Task, TaskStatus}, configuration_provider};
+use crate::{models::{TaskRequest, Task, TaskStatus}, configuration_provider::{self}};
 use amiquip::{Connection, Exchange, Publish};
 use uuid::Uuid;
 use redis::Commands;
@@ -10,7 +10,7 @@ pub async fn put_task(body: TaskRequest) -> Result<impl warp::Reply, warp::Rejec
 
     let task = Task {
         id: task_id.clone(),
-        kind: body.kind,
+        kind: body.kind.clone(),
         context: body.context
     };
 
@@ -20,8 +20,14 @@ pub async fn put_task(body: TaskRequest) -> Result<impl warp::Reply, warp::Rejec
     let channel = connection.open_channel(None).unwrap();
     let exchange = Exchange::direct(&channel);
 
-    exchange.publish(Publish::new(&serialized_task, "default")).unwrap();
+    exchange.publish(Publish::new(&serialized_task, body.kind)).unwrap();
     connection.close().unwrap();
+
+
+    let res: Result<(), redis::RedisError> = redis::Client::open(settings.redis_url)
+        .and_then(|c| c.get_connection())
+        .and_then(|mut connection| connection.set(&task_id, "QUEUED".to_string()));
+    res.unwrap();
 
     Ok(warp::reply::json(&task_id))
 }
@@ -43,7 +49,7 @@ pub async fn check_task_status(task_id: String) -> Result<impl warp::Reply, warp
         let response = TaskStatus {
             id: task_id.clone(),
             found: false,
-            status: "QUEUED".to_string()
+            status: "NOT_FOUND".to_string()
         };
         return Ok(warp::reply::json(&response));
     }
